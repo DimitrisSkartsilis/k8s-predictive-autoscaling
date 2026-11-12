@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1     # not built into Kubernetes; added by the chart
+kind: ServiceMonitor
+metadata:
+  name: flagship-api
+  labels:
+    release: monitoring                  # Prometheus only picks up ServiceMonitors with this label
+spec:
+  selector:
+    matchLabels:
+      app: flagship-api                  # scrape the Service(s) labeled app: flagship-api
+  endpoints:
+    - port: http                         # on the port named "http"
+      path: /metrics                     # at this path
+      interval: 5s                       # every 5 seconds
