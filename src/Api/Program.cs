@@ -1,10 +1,13 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+app.UseRouting();
+app.UseHttpMetrics(); 
 
 if (app.Environment.IsDevelopment())
 {
@@ -37,6 +40,7 @@ app.MapGet("/work", (int? iterations) =>
     return Results.Ok(new { iterations = count, result = Convert.ToHexString(hash) });
 });
 
+app.MapMetrics();
 app.Run();
 
 record CreateDocumentRequest(string Title, string Content);
