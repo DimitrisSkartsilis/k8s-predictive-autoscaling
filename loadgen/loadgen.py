@@ -1,9 +1,14 @@
 import argparse
 import asyncio
+import math
 import time
 
 import httpx
 
+def target_rps(elapsed: float, base: float, amplitude: float, period: float) -> float:
+    """Requests per second at this moment: base plus a smooth wave."""
+    wave = (1 - math.cos(2 * math.pi * elapsed / period)) / 2   # goes 0 → 1 → 0 over one period
+    return base + amplitude * wave
 
 async def send(client: httpx.AsyncClient, url: str, stats: dict) -> None:
     """Send one request and record whether it succeeded."""
@@ -14,7 +19,7 @@ async def send(client: httpx.AsyncClient, url: str, stats: dict) -> None:
         stats["failed"] += 1
 
 
-async def run(url: str, rps: float, duration: float) -> None:
+async def run(url: str, base: float, amplitude: float, period: float, duration: float) -> None:
     # No keep-alive: every request opens a new connection, so the Service spreads them across pods.
     limits = httpx.Limits(max_keepalive_connections=0, max_connections=None)
     stats = {"sent": 0, "ok": 0, "failed": 0}
@@ -35,12 +40,14 @@ async def run(url: str, rps: float, duration: float) -> None:
             # Print progress every 5 seconds.
             now = time.monotonic()
             if now - last_report >= 5:
-                print(f"{now - start:6.0f}s  sent={stats['sent']}  ok={stats['ok']}  "
-                      f"failed={stats['failed']}  in_flight={len(in_flight)}")
+                print(f"{now - start:6.0f}s  rate={target_rps(now - start, base, amplitude, period):.2f}  "
+                    f"sent={stats['sent']}  ok={stats['ok']}  "
+                    f"failed={stats['failed']}  in_flight={len(in_flight)}")
                 last_report = now
 
             # Schedule the next request exactly 1/rps seconds after the previous one.
-            next_send += 1 / rps
+            rate = target_rps(time.monotonic() - start, base, amplitude, period)
+            next_send += 1 / rate
             await asyncio.sleep(max(0, next_send - time.monotonic()))
 
         await asyncio.gather(*in_flight)   # let the last requests finish
@@ -50,7 +57,9 @@ async def run(url: str, rps: float, duration: float) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Open-loop traffic generator")
     parser.add_argument("--url", default="http://localhost:8080/work")
-    parser.add_argument("--rps", type=float, default=2, help="requests per second")
+    parser.add_argument("--base", type=float, default=2, help="minimum requests per second")
+    parser.add_argument("--amplitude", type=float, default=0, help="how much the wave adds at its peak")
+    parser.add_argument("--period", type=float, default=300, help="seconds for one full wave")
     parser.add_argument("--duration", type=float, default=60, help="seconds to run")
     args = parser.parse_args()
-    asyncio.run(run(args.url, args.rps, args.duration))
+    asyncio.run(run(args.url, args.base, args.amplitude, args.period, args.duration))
