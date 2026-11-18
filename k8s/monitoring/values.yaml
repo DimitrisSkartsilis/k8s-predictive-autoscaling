@@ -1,0 +1,9 @@
+alertmanager:
+  enabled: false                 # removes the Alertmanager pod
+
+grafana:
+  defaultDashboardsEnabled: false   # skip the ~30 preinstalled dashboards
+
+prometheus-node-exporter:
+  hostRootFsMount:
+    enabled: false               # the Docker Desktop workaround
